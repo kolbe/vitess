@@ -3,6 +3,9 @@ package registry
 import (
 	"context"
 	"fmt"
+	"os"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -82,6 +85,7 @@ func (reg *TopoRegistry) isConstructed() bool {
 }
 
 func (reg *TopoRegistry) Init(ctx context.Context, target *querypb.Target) error {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	if target == nil {
 		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "target cannot be nil")
 	}
@@ -104,6 +108,7 @@ func (reg *TopoRegistry) Init(ctx context.Context, target *querypb.Target) error
 }
 
 func (reg *TopoRegistry) Refresh(ctx context.Context) error {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	if !reg.isConstructed() {
 		return notConstructed
 	}
@@ -116,17 +121,19 @@ func (reg *TopoRegistry) Refresh(ctx context.Context) error {
 	if len(reg.targetTablets) == 0 {
 		log.Warningf("no tablets found for physical target %s/%s, this may lead to issues with resolving targets", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard)
 	}
-	log.Infof("TopoRegistry initialized for cell %s with %d tablets", reg.physicalTarget.Cell, len(reg.targetTablets))
+	log.Infof("TopoRegistry refreshed for cell %s with %d tablets", reg.physicalTarget.Cell, len(reg.targetTablets))
 	return nil
 }
 
 func (reg *TopoRegistry) GetPhysicalKeyspaceShard() (string, string) {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
 	return reg.physicalTarget.Keyspace, reg.physicalTarget.Shard
 }
 
 func (reg *TopoRegistry) ResolveTarget(ctx context.Context, target *querypb.Target) (*querypb.Target, string, error) {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	/*
 	* Return the dbName if it's specified in req.DBNameOverride and it's a permissible DB - if not permissible = error.
 	* If there is no virtual shards present, return the DB name for the physical shard + no error.
@@ -160,8 +167,10 @@ func (reg *TopoRegistry) ResolveTarget(ctx context.Context, target *querypb.Targ
 
 	// TODO: This is a hack - the addTablet() method is not working correctly
 	// when we add tablets. I'll fix it soon.
-	if err := reg.loadTabletsAndShards(context.Background()); err != nil {
-		return nil, "", err
+	if os.Getenv("REG_REFRESH_ALWAYS") != "" {
+		if err := reg.loadTabletsAndShards(context.Background()); err != nil {
+			return nil, "", err
+		}
 	}
 
 	tk := targetKey{
@@ -223,6 +232,7 @@ func (reg *TopoRegistry) ResolveTarget(ctx context.Context, target *querypb.Targ
 }
 
 func (reg *TopoRegistry) ResolveDbName(dbName string) (*topo.TabletInfo, error) {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	if dbName == "" {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "dbName cannot be empty")
 	}
@@ -232,8 +242,10 @@ func (reg *TopoRegistry) ResolveDbName(dbName string) (*topo.TabletInfo, error) 
 
 	// TODO: This is a hack - the addTablet() method is not working correctly
 	// when we add tablets. I'll fix it soon.
-	if err := reg.loadTabletsAndShards(context.Background()); err != nil {
-		return nil, err
+	if os.Getenv("REG_REFRESH_ALWAYS") != "" {
+		if err := reg.loadTabletsAndShards(context.Background()); err != nil {
+			return nil, err
+		}
 	}
 
 	tablet, exists := reg.dbNameTablets[dbName]
@@ -246,6 +258,7 @@ func (reg *TopoRegistry) ResolveDbName(dbName string) (*topo.TabletInfo, error) 
 }
 
 func (reg *TopoRegistry) GetKeyspaceShardByDbName(dbName string) (string, string, error) {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	if dbName == "" {
 		// Fallback to physical keyspace for empty dbName
 		return reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, nil
@@ -256,8 +269,10 @@ func (reg *TopoRegistry) GetKeyspaceShardByDbName(dbName string) (string, string
 
 	// TODO: This is a hack - the addTablet() method is not working correctly
 	// when we add tablets. I'll fix it soon.
-	if err := reg.loadTabletsAndShards(context.Background()); err != nil {
-		return "", "", err
+	if os.Getenv("REG_REFRESH_ALWAYS") != "" {
+		if err := reg.loadTabletsAndShards(context.Background()); err != nil {
+			return "", "", err
+		}
 	}
 
 	tablet, exists := reg.dbNameTablets[dbName]
@@ -272,13 +287,16 @@ func (reg *TopoRegistry) GetKeyspaceShardByDbName(dbName string) (string, string
 }
 
 func (reg *TopoRegistry) GetDBNameByKeyspaceShard(keyspace, shard string) (string, error) {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
 
 	// TODO: This is a hack - the addTablet() method is not working correctly
 	// when we add tablets. I'll fix it soon.
-	if err := reg.loadTabletsAndShards(context.Background()); err != nil {
-		return "", err
+	if os.Getenv("REG_REFRESH_ALWAYS") != "" {
+		if err := reg.loadTabletsAndShards(context.Background()); err != nil {
+			return "", err
+		}
 	}
 
 	for _, tablet := range reg.targetTablets {
@@ -291,6 +309,7 @@ func (reg *TopoRegistry) GetDBNameByKeyspaceShard(keyspace, shard string) (strin
 }
 
 func (reg *TopoRegistry) GetVSchemaByKeyspace(keyspace string) (*vindexes.VSchema, error) {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
 
@@ -303,6 +322,7 @@ func (reg *TopoRegistry) GetVSchemaByKeyspace(keyspace string) (*vindexes.VSchem
 }
 
 func (reg *TopoRegistry) SetVSchema(keyspace string, vschema *vindexes.VSchema) {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
 
@@ -310,13 +330,16 @@ func (reg *TopoRegistry) SetVSchema(keyspace string, vschema *vindexes.VSchema) 
 }
 
 func (reg *TopoRegistry) GetAllKeyspaces() []string {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
 
 	// TODO: This is a hack - the addTablet() method is not working correctly
 	// when we add tablets. I'll fix it soon.
-	if err := reg.loadTabletsAndShards(context.Background()); err != nil {
-		return []string{}
+	if os.Getenv("REG_REFRESH_ALWAYS") != "" {
+		if err := reg.loadTabletsAndShards(context.Background()); err != nil {
+			return []string{}
+		}
 	}
 
 	// Create a set to avoid duplicates
@@ -346,13 +369,16 @@ func (reg *TopoRegistry) GetAllKeyspaces() []string {
 }
 
 func (reg *TopoRegistry) GetAllDBNames() []string {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
 
 	// TODO: This is a hack - the addTablet() method is not working correctly
 	// when we add tablets. I'll fix it soon.
-	if err := reg.loadTabletsAndShards(context.Background()); err != nil {
-		return []string{}
+	if os.Getenv("REG_REFRESH_ALWAYS") != "" {
+		if err := reg.loadTabletsAndShards(context.Background()); err != nil {
+			return []string{}
+		}
 	}
 
 	// Create a set to avoid duplicates
@@ -374,6 +400,7 @@ func (reg *TopoRegistry) GetAllDBNames() []string {
 }
 
 func (reg *TopoRegistry) AddTablet(tablet *topo.TabletInfo) error {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	if tablet == nil || tablet.Tablet == nil {
 		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "tablet cannot be nil")
 	}
@@ -389,6 +416,7 @@ func (reg *TopoRegistry) AddTablet(tablet *topo.TabletInfo) error {
 }
 
 func (reg *TopoRegistry) RemoveTablet(keyspace, shard string) error {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	if keyspace == "" || shard == "" {
 		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace and shard cannot be empty")
 	}
@@ -411,12 +439,19 @@ func (reg *TopoRegistry) RemoveTablet(keyspace, shard string) error {
 	log.Infof("Removed tablet for keyspace %s and shard %s from registry", keyspace, shard)
 	return nil
 }
+
 func (reg *TopoRegistry) loadTabletsAndShards(ctx context.Context) error {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
+	currentCount := len(reg.targetTablets)
+	log.Infof("loading virtual tablets for physical tablet %s/%s in registry instance at %p (currently %d):\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, currentCount, sprintTopNStackFrames(3))
 	tablets, err := reg.ts.GetVirtualTablets(ctx, reg.physicalTarget.Cell, reg.physicalTarget.Keyspace, reg.physicalTarget.Shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get virtual tablets for cell %q, keyspace %q, shard %q", reg.physicalTarget.Cell, reg.physicalTarget.Keyspace, reg.physicalTarget.Shard)
 	}
 
+	if len(tablets) != currentCount {
+		log.Infof("number of virtual tablets changed! was %d, now %d", currentCount, len(tablets))
+	}
 	for _, tablet := range tablets {
 		if err := reg.storeTablet(tablet); err != nil {
 			return vterrors.Wrapf(err, "failed to store tablet %s/%s", tablet.Keyspace, tablet.Shard)
@@ -426,6 +461,7 @@ func (reg *TopoRegistry) loadTabletsAndShards(ctx context.Context) error {
 }
 
 func (reg *TopoRegistry) storeTablet(tablet *topo.TabletInfo) error {
+	log.Infof("entering registry function for physical tablet %s/%s in registry instance at %p:\n%s", reg.physicalTarget.Keyspace, reg.physicalTarget.Shard, reg, sprintTopNStackFrames(3))
 	if tablet == nil || tablet.Tablet == nil {
 		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "tablet cannot be nil")
 	}
@@ -448,4 +484,23 @@ func formatSafeSchema(keyspace, shard string) string {
 	safeKeyspace := strings.ReplaceAll(keyspace, "-", "_")
 	safeShard := strings.ReplaceAll(shard, "-", "_")
 	return fmt.Sprintf("vt_%s_%s", safeKeyspace, safeShard)
+}
+
+func sprintTopNStackFrames(n int) string {
+	var b strings.Builder
+	skip := 1
+	for i := skip; i < n+skip; i++ {
+		pc, file, line, ok := runtime.Caller(i)
+		if !ok {
+			break // No more frames
+		}
+		f := runtime.FuncForPC(pc)
+		if f == nil {
+			b.WriteString(fmt.Sprintf("  Frame %d: Unknown function at %s:%d\n", i, file, line))
+		} else {
+			b.WriteString(fmt.Sprintf("  Frame %d: %s (%s:%d)\n", i, f.Name(), file, line))
+		}
+	}
+	b.Write(debug.Stack())
+	return b.String()
 }

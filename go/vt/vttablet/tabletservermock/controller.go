@@ -133,7 +133,7 @@ func (tqsc *Controller) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.D
 	return nil
 }
 
-func (tqsc *Controller) InitRegistry(ctx context.Context, target *querypb.Target) error {
+func (tqsc *Controller) InitRegistry(ctx context.Context, tablet *topodatapb.Tablet) error {
 	// TODO: Implement this if needed for tests.
 	return nil
 }

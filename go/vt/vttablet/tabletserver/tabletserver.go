@@ -155,6 +155,7 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	// If this TabletServer is created from a place where the registry is not
 	// otherwise needed, we can create a new one here.
 	if reg == nil {
+		log.Warningf("NewTabletServer: Register is nil, creating a new TopoRegistry")
 		reg = registry.NewTopoRegistry(topoServer)
 	}
 	exporter := servenv.NewExporter(name, "Tablet")
@@ -432,8 +433,13 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileI
 	return nil
 }
 
-func (tsv *TabletServer) InitRegistry(ctx context.Context, target *querypb.Target) error {
-
+func (tsv *TabletServer) InitRegistry(ctx context.Context, tablet *topodatapb.Tablet) error {
+	target := &querypb.Target{
+		Cell:       tablet.Alias.Cell,
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
+	}
 	// Initialize the registry with the current tablet alias.
 	if err := tsv.registry.Init(ctx, target); err != nil {
 		return vterrors.Wrapf(err, "failed to load tablets and shards for physical target %s/%s", target.Keyspace, target.Shard)

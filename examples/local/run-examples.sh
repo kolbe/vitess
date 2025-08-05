@@ -27,7 +27,7 @@ export hostname=localhost
 
 source ../common/env.sh # Required so that "mysql" works from alias
 
-set -e
+set -ex
 
 ./101_initial_cluster.sh
 

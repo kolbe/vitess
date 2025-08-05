@@ -22,6 +22,9 @@ import (
 	"os"
 	"time"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/vttablet/registry"
 
 	"github.com/spf13/cobra"
@@ -144,13 +147,6 @@ func run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	reg := registry.NewTopoRegistry(ts)
-
-	qsc, err := createTabletServer(ctx, env, config, ts, tabletAlias, srvTopoCounts, reg)
-	if err != nil {
-		return err
-	}
-
 	mysqld := mysqlctl.NewMysqld(config.DB)
 	servenv.OnClose(mysqld.Close)
 
@@ -163,6 +159,24 @@ func run(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse --tablet-path: %w", err)
 	}
+	reg := registry.NewTopoRegistry(ts)
+	// Init registry to discover the virtual shards present.
+	// err = tm.QueryServiceControl.InitRegistry(ctx, tablet)
+	err = reg.Init(ctx, &querypb.Target{
+		Cell:       tablet.Alias.Cell,
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
+	})
+	if err != nil {
+		return vterrors.Wrap(err, "failed to InitRegistry")
+	}
+
+	qsc, err := createTabletServer(ctx, env, config, ts, tabletAlias, srvTopoCounts, reg)
+	if err != nil {
+		return err
+	}
+
 	tm = &tabletmanager.TabletManager{
 		BatchCtx:            ctx,
 		Env:                 env,

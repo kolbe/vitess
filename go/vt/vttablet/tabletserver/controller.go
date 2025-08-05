@@ -52,7 +52,7 @@ type Controller interface {
 	InitDBConfig(target *querypb.Target, dbConfigs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon) error
 
 	// InitRegistry initializes the registry for this query service.
-	InitRegistry(ctx context.Context, target *querypb.Target) error
+	InitRegistry(ctx context.Context, tablet *topodatapb.Tablet) error
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.
