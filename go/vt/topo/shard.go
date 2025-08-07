@@ -409,9 +409,10 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, tabletType topodata
 	}
 
 	if len(cells) > 0 {
-		if tabletType == topodatapb.TabletType_PRIMARY {
+		switch tabletType {
+		case topodatapb.TabletType_PRIMARY:
 			return errors.New(dlNoCellsForPrimary)
-		} else if tabletType == topodatapb.TabletType_VIRTUAL {
+		case topodatapb.TabletType_VIRTUAL:
 			return errors.New(dlNoCellsForVirtual)
 		}
 	}
